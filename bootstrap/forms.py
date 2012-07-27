@@ -1,4 +1,4 @@
-import os
+import os, re
 from django.template import Context,RequestContext
 from django.template.loader import get_template, select_template
 from django.utils.safestring import mark_safe
@@ -37,23 +37,31 @@ class BootstrapMixin(object):
         return ''.join(["<div class=\"alert alert-error\">%s</div>" % error
                         for error in self.top_errors])
 
-    def get_layout(self):
+    def get_layout(self, layout_name=None):
         """ Return the user-specified layout if one is available, otherwise
             build a default layout containing all fields.
         """
-        if hasattr(self, 'Meta') and hasattr(self.Meta, 'layout'):
+        if hasattr(self, 'Meta') and hasattr(self.Meta, 'layout') and not layout_name:
             return self.Meta.layout
+        
+        elif hasattr(self, 'Meta') and hasattr(self.Meta, 'layout') and layout_name:
+            for layout in self.Meta.layout:
+                if layout.name == layout_name:
+                    return layout
         else:
             # Construct a simple layout using the keys from the fields
             return self.fields.keys()
 
-    def as_div(self):
+    def as_div(self, layout=None):
         """ Render the form as a set of <div>s. """
 
         self.top_errors = self.non_field_errors()
         self.prefix_fields = []
 
-        output = self.render_fields(self.get_layout())
+        if layout:
+            output = layout.as_html(self)
+        else:
+            output = self.render_fields(self.get_layout())
 
         if self.top_errors:
             errors = self.top_errors_as_html()
@@ -150,6 +158,11 @@ class BootstrapMixin(object):
         # Default output is now as <div> tags.
         return self.as_div()
 
+    def __getattr__(self, name):
+        layout_object = self.get_layout( name)
+        if isinstance(layout_object, Fieldset):
+            return self.as_div(layout_object)
+        return super(BootstrapMixin, self).__getattr__(self, name)
 
 class BootstrapForm(BootstrapMixin, forms.Form):
     pass
@@ -163,11 +176,12 @@ class Fieldset(object):
     """ Fieldset container. Renders to a <fieldset>. """
 
     def __init__(self, legend, *fields, **kwargs):
+        self.name = kwargs.get('name', re.sub('[^A-Za-z0-9]+', '', legend.lower()))
         self.legend = legend
         self.fields = fields
-        self.css_class = kwargs.get('css_class', '_'.join(legend.lower().split()))
+        self.css_class = kwargs.get('css_class', re.sub('[^A-Za-z0-9]+', '', legend.lower()))
 
     def as_html(self, form):
         legend_html = self.legend and (u'<legend>%s</legend>' % self.legend) or ''
-        return u'<fieldset class="%s">%s%s</fieldset>' % (self.css_class, legend_html, form.render_fields(self.fields))
+        return u'<fieldset class="%s" id="%s">%s%s</fieldset>' % (self.css_class, self.name, legend_html, form.render_fields(self.fields))
 
