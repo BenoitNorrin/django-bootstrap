@@ -159,10 +159,11 @@ class BootstrapMixin(object):
         return self.as_div()
 
     def __getattr__(self, name):
+        super(BootstrapMixin, self).__getattr__(self, name)
+        
         layout_object = self.get_layout( name)
         if isinstance(layout_object, Fieldset):
             return self.as_div(layout_object)
-        return super(BootstrapMixin, self).__getattr__(self, name)
 
 class BootstrapForm(BootstrapMixin, forms.Form):
     pass
